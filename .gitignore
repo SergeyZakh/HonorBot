@@ -9,7 +9,7 @@ env/
 .env
 .env.*
 # Datenbankdateien
-karma.db
+honor.db
 *.sqlite3
 # Sonstiges
 .DS_Store
