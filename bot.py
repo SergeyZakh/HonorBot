@@ -124,13 +124,12 @@ class HonorRepository:
             )
             conn.commit()
 
-def add_user_honor(self, user_id: int, delta: int, reason: str = "", by: int = None):
-    multiplier = 2 if delta > 0 and self.has_pet(user_id) else 1
-    actual = delta * multiplier
-    current = self.get_user_honor(user_id)
-    self.set_user_honor(user_id, current + actual)
-    self.log_honor_change(user_id, actual, reason, by)
-
+    def add_user_honor(self, user_id: int, delta: int, reason: str = "", by: int = None):
+        multiplier = 2 if delta > 0 and self.has_pet(user_id) else 1
+        actual = delta * multiplier
+        current = self.get_user_honor(user_id)
+        self.set_user_honor(user_id, current + actual)
+        self.log_honor_change(user_id, actual, reason, by)
 
     def log_honor_change(self, user_id: int, delta: int, reason: str, by: int = None):
         with sqlite3.connect(self.db_path) as conn:
