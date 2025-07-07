@@ -124,12 +124,13 @@ class HonorRepository:
             )
             conn.commit()
 
-    def add_user_honor(self, user_id: int, delta: int, reason: str = "", by: int = None):
-        multiplier = 2 if delta > 0 and self.has_pet(user_id) else 1
-        actual = delta * multiplier
-        current = self.get_user_honor(user_id)
-        self.set_user_honor(user_id, current + actual)
-        self.log_honor_change(user_id, actual, reason, by)
+def add_user_honor(self, user_id: int, delta: int, reason: str = "", by: int = None):
+    multiplier = 2 if delta > 0 and self.has_pet(user_id) else 1
+    actual = delta * multiplier
+    current = self.get_user_honor(user_id)
+    self.set_user_honor(user_id, current + actual)
+    self.log_honor_change(user_id, actual, reason, by)
+
 
     def log_honor_change(self, user_id: int, delta: int, reason: str, by: int = None):
         with sqlite3.connect(self.db_path) as conn:
@@ -206,6 +207,7 @@ class HonorRepository:
             )
             conn.commit()
 
+
     # --- Pet System ---
     def has_pet(self, user_id: int) -> bool:
         with sqlite3.connect(self.db_path) as conn:
@@ -265,6 +267,8 @@ class HonorRepository:
     def add_user_rubel(self, user_id: int, delta: int):
         current = self.get_user_rubel(user_id)
         self.set_user_rubel(user_id, current + delta)
+
+
 
 repo = HonorRepository(DB_PATH)
 
@@ -427,8 +431,12 @@ async def history(interaction: discord.Interaction):
     """Zeigt die letzten 10 Honor-Änderungen als Embed."""
     rows = repo.get_honor_log(interaction.user.id)
     if not rows:
+
         embed = discord.Embed(title="ℹ️ Keine Daten", description="Keine Honor-Historie gefunden.", color=0x95a5a6)
         await interaction.response.send_message(embed=embed, ephemeral=True)
+=======
+        await interaction.response.send_message("Keine Honor-Historie gefunden.")
+
         return
     embed = discord.Embed(title="🕓 Deine letzten 10 Honor-Änderungen", color=0x95a5a6)
     for delta, reason, ts in rows:
@@ -444,16 +452,24 @@ async def bless(interaction: discord.Interaction, user: discord.Member):
         return
     repo.add_user_honor(user.id, BLESS_AMOUNT)
     await update_member_title(user)
+
     embed = discord.Embed(title="🙏 Segen", description=f"{user.mention} wurde gesegnet! +{BLESS_AMOUNT} Honor.", color=0x2ecc71)
     await interaction.response.send_message(embed=embed)
+=======
+    await interaction.response.send_message(f"{user.mention} wurde gesegnet! +{BLESS_AMOUNT} Honor.")
+
 
 @bot.tree.command(name="rank", description="Zeigt den Rang eines Users")
 @app_commands.describe(user="Der User, dessen Rang angezeigt werden soll")
 async def rank(interaction: discord.Interaction, user: discord.Member):
     k = repo.get_user_honor(user.id)
     name, emoji, _ = get_rank(k)
+
     embed = discord.Embed(title="🏅 Ranginfo", description=f"{user.mention} hat {k} Honor und Rang {emoji} {name}.", color=0x3498db)
     await interaction.response.send_message(embed=embed, ephemeral=True)
+=======
+    await interaction.response.send_message(f"{user.mention} hat {k} Honor und Rang: {emoji} {name}")
+
 
 @bot.tree.command(name="fixroles", description="Synchronisiert deine Rolle mit deinem aktuellen Honor")
 async def fixroles(interaction: discord.Interaction):
@@ -471,8 +487,12 @@ async def thanks(interaction: discord.Interaction, user: discord.Member):
         return
     repo.add_user_honor(user.id, 20)
     await update_member_title(user)
+
     embed = discord.Embed(title="🎉 Danke!", description=f"{user.mention} wurde von {interaction.user.mention} bedankt! +20 Honor.", color=0x2ecc71)
     await interaction.response.send_message(embed=embed)
+=======
+    await interaction.response.send_message(f"{user.mention} wurde von {interaction.user.mention} bedankt! +20 Honor.")
+
 
 @bot.tree.command(name="helped", description="Bestätige, dass dir jemand geholfen hat (+30 Honor für den Helfer)")
 @app_commands.describe(user="Der User, der dir geholfen hat")
@@ -483,8 +503,12 @@ async def helped(interaction: discord.Interaction, user: discord.Member):
         return
     repo.add_user_honor(user.id, 30)
     await update_member_title(user)
+
     embed = discord.Embed(title="✅ Helfer bestätigt", description=f"{user.mention} wurde als Helfer bestätigt! +30 Honor.", color=0x2ecc71)
     await interaction.response.send_message(embed=embed)
+=======
+    await interaction.response.send_message(f"{user.mention} wurde als Helfer bestätigt! +30 Honor.")
+
 
 @bot.tree.command(name="honor_log", description="Admins: Zeigt die letzten 20 Honor-Änderungen eines Users")
 @app_commands.describe(user="Der User, dessen Honor-Log angezeigt werden soll")
@@ -496,8 +520,12 @@ async def honor_log(interaction: discord.Interaction, user: discord.Member):
         return
     rows = repo.get_honor_log_admin(user.id)
     if not rows:
+
         embed = discord.Embed(title="ℹ️ Keine Daten", description="Keine Honor-Logs für diesen User gefunden.", color=0x95a5a6)
         await interaction.response.send_message(embed=embed, ephemeral=True)
+=======
+        await interaction.response.send_message("Keine Honor-Logs für diesen User gefunden.")
+
         return
     embed = discord.Embed(title=f"🕓 Letzte 20 Honor-Änderungen von {user.display_name}", color=0x95a5a6)
     for delta, reason, by, ts in rows:
@@ -557,6 +585,7 @@ async def lootbox(interaction: discord.Interaction):
     repo.log_lootbox(user_id, reward)
     await update_member_title(interaction.user)
     embed = discord.Embed(title="🪙 Lootbox geöffnet!", description=f"Du hast **{reward} Honor** aus der Lootbox erhalten!", color=0x9b59b6)
+
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="pet_adopt", description="Adoptiere ein Haustier für den Honor-Bonus")
@@ -630,6 +659,8 @@ async def rubel_daily(interaction: discord.Interaction):
     repo.add_user_rubel(interaction.user.id, RUBEL_DAILY)
     repo.claim_daily(interaction.user.id)
     embed = discord.Embed(title="💰 Daily Rubel", description=f"Du hast {RUBEL_DAILY} Rubel erhalten!", color=0x2ecc71)
+=======
+
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class BestätigungsView(View):
