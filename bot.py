@@ -431,12 +431,8 @@ async def history(interaction: discord.Interaction):
     """Zeigt die letzten 10 Honor-Änderungen als Embed."""
     rows = repo.get_honor_log(interaction.user.id)
     if not rows:
-
         embed = discord.Embed(title="ℹ️ Keine Daten", description="Keine Honor-Historie gefunden.", color=0x95a5a6)
         await interaction.response.send_message(embed=embed, ephemeral=True)
-=======
-        await interaction.response.send_message("Keine Honor-Historie gefunden.")
-
         return
     embed = discord.Embed(title="🕓 Deine letzten 10 Honor-Änderungen", color=0x95a5a6)
     for delta, reason, ts in rows:
@@ -455,8 +451,6 @@ async def bless(interaction: discord.Interaction, user: discord.Member):
 
     embed = discord.Embed(title="🙏 Segen", description=f"{user.mention} wurde gesegnet! +{BLESS_AMOUNT} Honor.", color=0x2ecc71)
     await interaction.response.send_message(embed=embed)
-=======
-    await interaction.response.send_message(f"{user.mention} wurde gesegnet! +{BLESS_AMOUNT} Honor.")
 
 
 @bot.tree.command(name="rank", description="Zeigt den Rang eines Users")
@@ -467,8 +461,6 @@ async def rank(interaction: discord.Interaction, user: discord.Member):
 
     embed = discord.Embed(title="🏅 Ranginfo", description=f"{user.mention} hat {k} Honor und Rang {emoji} {name}.", color=0x3498db)
     await interaction.response.send_message(embed=embed, ephemeral=True)
-=======
-    await interaction.response.send_message(f"{user.mention} hat {k} Honor und Rang: {emoji} {name}")
 
 
 @bot.tree.command(name="fixroles", description="Synchronisiert deine Rolle mit deinem aktuellen Honor")
@@ -490,8 +482,6 @@ async def thanks(interaction: discord.Interaction, user: discord.Member):
 
     embed = discord.Embed(title="🎉 Danke!", description=f"{user.mention} wurde von {interaction.user.mention} bedankt! +20 Honor.", color=0x2ecc71)
     await interaction.response.send_message(embed=embed)
-=======
-    await interaction.response.send_message(f"{user.mention} wurde von {interaction.user.mention} bedankt! +20 Honor.")
 
 
 @bot.tree.command(name="helped", description="Bestätige, dass dir jemand geholfen hat (+30 Honor für den Helfer)")
@@ -506,8 +496,6 @@ async def helped(interaction: discord.Interaction, user: discord.Member):
 
     embed = discord.Embed(title="✅ Helfer bestätigt", description=f"{user.mention} wurde als Helfer bestätigt! +30 Honor.", color=0x2ecc71)
     await interaction.response.send_message(embed=embed)
-=======
-    await interaction.response.send_message(f"{user.mention} wurde als Helfer bestätigt! +30 Honor.")
 
 
 @bot.tree.command(name="honor_log", description="Admins: Zeigt die letzten 20 Honor-Änderungen eines Users")
@@ -520,12 +508,8 @@ async def honor_log(interaction: discord.Interaction, user: discord.Member):
         return
     rows = repo.get_honor_log_admin(user.id)
     if not rows:
-
         embed = discord.Embed(title="ℹ️ Keine Daten", description="Keine Honor-Logs für diesen User gefunden.", color=0x95a5a6)
         await interaction.response.send_message(embed=embed, ephemeral=True)
-=======
-        await interaction.response.send_message("Keine Honor-Logs für diesen User gefunden.")
-
         return
     embed = discord.Embed(title=f"🕓 Letzte 20 Honor-Änderungen von {user.display_name}", color=0x95a5a6)
     for delta, reason, by, ts in rows:
@@ -659,8 +643,6 @@ async def rubel_daily(interaction: discord.Interaction):
     repo.add_user_rubel(interaction.user.id, RUBEL_DAILY)
     repo.claim_daily(interaction.user.id)
     embed = discord.Embed(title="💰 Daily Rubel", description=f"Du hast {RUBEL_DAILY} Rubel erhalten!", color=0x2ecc71)
-=======
-
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class BestätigungsView(View):
