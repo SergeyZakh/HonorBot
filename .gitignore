@@ -1,0 +1,17 @@
+# Bytecode, virtuelle Umgebungen, Umgebungsdateien
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.venv/
+.env
+.env.*
+# Datenbankdateien
+karma.db
+*.sqlite3
+# Sonstiges
+.DS_Store
+.idea/
+.vscode/
