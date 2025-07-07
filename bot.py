@@ -26,6 +26,8 @@ DB_PATH = os.environ.get("HONOR_DB_PATH", "honor.db")
 HONOR_MIN = -144_000
 HONOR_MAX = 144_000
 BLESS_AMOUNT = 100_000
+PET_XP_PER_LEVEL = 100
+RUBEL_DAILY = 50
 INSULT_API_URL = "https://www.purgomalum.com/service/containsprofanity?text="
 
 # --- Logging ---
@@ -87,6 +89,23 @@ class HonorRepository:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS pets (
+                    user_id INTEGER PRIMARY KEY,
+                    level INTEGER NOT NULL DEFAULT 1,
+                    xp INTEGER NOT NULL DEFAULT 0
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS user_rubel (
+                    user_id INTEGER PRIMARY KEY,
+                    rubel INTEGER NOT NULL DEFAULT 0
+                )
+                """
+            )
             conn.commit()
 
     def get_user_honor(self, user_id: int) -> int:
@@ -105,10 +124,13 @@ class HonorRepository:
             )
             conn.commit()
 
-    def add_user_honor(self, user_id: int, delta: int, reason: str = "", by: int = None):
-        current = self.get_user_honor(user_id)
-        self.set_user_honor(user_id, current + delta)
-        self.log_honor_change(user_id, delta, reason, by)
+def add_user_honor(self, user_id: int, delta: int, reason: str = "", by: int = None):
+    multiplier = 2 if delta > 0 and self.has_pet(user_id) else 1
+    actual = delta * multiplier
+    current = self.get_user_honor(user_id)
+    self.set_user_honor(user_id, current + actual)
+    self.log_honor_change(user_id, actual, reason, by)
+
 
     def log_honor_change(self, user_id: int, delta: int, reason: str, by: int = None):
         with sqlite3.connect(self.db_path) as conn:
@@ -184,6 +206,69 @@ class HonorRepository:
                 (user_id, reward)
             )
             conn.commit()
+
+
+    # --- Pet System ---
+    def has_pet(self, user_id: int) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            return conn.execute(
+                "SELECT 1 FROM pets WHERE user_id = ?",
+                (user_id,)
+            ).fetchone() is not None
+
+    def create_pet(self, user_id: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT OR IGNORE INTO pets(user_id) VALUES(?)",
+                (user_id,)
+            )
+            conn.commit()
+
+    def get_pet(self, user_id: int) -> Tuple[int, int]:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT level, xp FROM pets WHERE user_id = ?",
+                (user_id,)
+            ).fetchone()
+            return row if row else (0, 0)
+
+    def add_pet_xp(self, user_id: int, xp: int):
+        level, current_xp = self.get_pet(user_id)
+        current_xp += xp
+        while current_xp >= PET_XP_PER_LEVEL:
+            level += 1
+            current_xp -= PET_XP_PER_LEVEL
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO pets(user_id, level, xp) VALUES(?, ?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET level = ?, xp = ?",
+                (user_id, level, current_xp, level, current_xp),
+            )
+            conn.commit()
+
+    # --- Rubel System ---
+    def get_user_rubel(self, user_id: int) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            row = conn.execute(
+                "SELECT rubel FROM user_rubel WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            return row[0] if row else 0
+
+    def set_user_rubel(self, user_id: int, amount: int):
+        with sqlite3.connect(self.db_path) as conn:
+            conn.execute(
+                "INSERT INTO user_rubel(user_id, rubel) VALUES(?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET rubel = excluded.rubel",
+                (user_id, amount),
+            )
+            conn.commit()
+
+    def add_user_rubel(self, user_id: int, delta: int):
+        current = self.get_user_rubel(user_id)
+        self.set_user_rubel(user_id, current + delta)
+
+
 
 repo = HonorRepository(DB_PATH)
 
@@ -346,7 +431,12 @@ async def history(interaction: discord.Interaction):
     """Zeigt die letzten 10 Honor-Änderungen als Embed."""
     rows = repo.get_honor_log(interaction.user.id)
     if not rows:
+
+        embed = discord.Embed(title="ℹ️ Keine Daten", description="Keine Honor-Historie gefunden.", color=0x95a5a6)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+=======
         await interaction.response.send_message("Keine Honor-Historie gefunden.")
+
         return
     embed = discord.Embed(title="🕓 Deine letzten 10 Honor-Änderungen", color=0x95a5a6)
     for delta, reason, ts in rows:
@@ -357,55 +447,85 @@ async def history(interaction: discord.Interaction):
 @app_commands.describe(user="Der zu segnende User")
 async def bless(interaction: discord.Interaction, user: discord.Member):
     if user.bot:
-        await interaction.response.send_message("Bots können nicht gesegnet werden.", ephemeral=True)
+        embed = discord.Embed(title="🚫 Fehler", description="Bots können nicht gesegnet werden.", color=0xe74c3c)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     repo.add_user_honor(user.id, BLESS_AMOUNT)
     await update_member_title(user)
+
+    embed = discord.Embed(title="🙏 Segen", description=f"{user.mention} wurde gesegnet! +{BLESS_AMOUNT} Honor.", color=0x2ecc71)
+    await interaction.response.send_message(embed=embed)
+=======
     await interaction.response.send_message(f"{user.mention} wurde gesegnet! +{BLESS_AMOUNT} Honor.")
+
 
 @bot.tree.command(name="rank", description="Zeigt den Rang eines Users")
 @app_commands.describe(user="Der User, dessen Rang angezeigt werden soll")
 async def rank(interaction: discord.Interaction, user: discord.Member):
     k = repo.get_user_honor(user.id)
     name, emoji, _ = get_rank(k)
+
+    embed = discord.Embed(title="🏅 Ranginfo", description=f"{user.mention} hat {k} Honor und Rang {emoji} {name}.", color=0x3498db)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+=======
     await interaction.response.send_message(f"{user.mention} hat {k} Honor und Rang: {emoji} {name}")
+
 
 @bot.tree.command(name="fixroles", description="Synchronisiert deine Rolle mit deinem aktuellen Honor")
 async def fixroles(interaction: discord.Interaction):
     member = interaction.user if isinstance(interaction.user, discord.Member) else interaction.guild.get_member(interaction.user.id)
     await update_member_title(member)
-    await interaction.response.send_message("Deine Rolle wurde aktualisiert!", ephemeral=True)
+    embed = discord.Embed(title="🔄 Rollen aktualisiert", description="Deine Rolle wurde erfolgreich synchronisiert.", color=0x2ecc71)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
 
 @bot.tree.command(name="thanks", description="Bedanke dich bei einem User und schenke ihm 20 Honor")
 @app_commands.describe(user="Der User, dem du danken möchtest")
 async def thanks(interaction: discord.Interaction, user: discord.Member):
     if user.bot:
-        await interaction.response.send_message("Bots können nicht bedankt werden.", ephemeral=True)
+        embed = discord.Embed(title="🚫 Fehler", description="Bots können nicht bedankt werden.", color=0xe74c3c)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     repo.add_user_honor(user.id, 20)
     await update_member_title(user)
+
+    embed = discord.Embed(title="🎉 Danke!", description=f"{user.mention} wurde von {interaction.user.mention} bedankt! +20 Honor.", color=0x2ecc71)
+    await interaction.response.send_message(embed=embed)
+=======
     await interaction.response.send_message(f"{user.mention} wurde von {interaction.user.mention} bedankt! +20 Honor.")
+
 
 @bot.tree.command(name="helped", description="Bestätige, dass dir jemand geholfen hat (+30 Honor für den Helfer)")
 @app_commands.describe(user="Der User, der dir geholfen hat")
 async def helped(interaction: discord.Interaction, user: discord.Member):
     if user.bot:
-        await interaction.response.send_message("Bots können nicht als Helfer bestätigt werden.", ephemeral=True)
+        embed = discord.Embed(title="🚫 Fehler", description="Bots können nicht als Helfer bestätigt werden.", color=0xe74c3c)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     repo.add_user_honor(user.id, 30)
     await update_member_title(user)
+
+    embed = discord.Embed(title="✅ Helfer bestätigt", description=f"{user.mention} wurde als Helfer bestätigt! +30 Honor.", color=0x2ecc71)
+    await interaction.response.send_message(embed=embed)
+=======
     await interaction.response.send_message(f"{user.mention} wurde als Helfer bestätigt! +30 Honor.")
+
 
 @bot.tree.command(name="honor_log", description="Admins: Zeigt die letzten 20 Honor-Änderungen eines Users")
 @app_commands.describe(user="Der User, dessen Honor-Log angezeigt werden soll")
 async def honor_log(interaction: discord.Interaction, user: discord.Member):
     """Zeigt Admins die letzten 20 Honor-Änderungen eines Users als Embed."""
     if not interaction.user.guild_permissions.administrator:
-        await interaction.response.send_message("Nur Admins können diesen Befehl nutzen!", ephemeral=True)
+        embed = discord.Embed(title="🚫 Kein Zugriff", description="Nur Admins können diesen Befehl nutzen!", color=0xe74c3c)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     rows = repo.get_honor_log_admin(user.id)
     if not rows:
+
+        embed = discord.Embed(title="ℹ️ Keine Daten", description="Keine Honor-Logs für diesen User gefunden.", color=0x95a5a6)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+=======
         await interaction.response.send_message("Keine Honor-Logs für diesen User gefunden.")
+
         return
     embed = discord.Embed(title=f"🕓 Letzte 20 Honor-Änderungen von {user.display_name}", color=0x95a5a6)
     for delta, reason, by, ts in rows:
@@ -418,7 +538,8 @@ async def honor_log(interaction: discord.Interaction, user: discord.Member):
 async def umfrage(interaction: discord.Interaction, frage: str, option1: str, option2: str = None, option3: str = None, option4: str = None, option5: str = None):
     options = [option for option in [option1, option2, option3, option4, option5] if option]
     if len(options) < 2:
-        await interaction.response.send_message("Bitte gib mindestens zwei Optionen an.", ephemeral=True)
+        embed = discord.Embed(title="🚫 Fehler", description="Bitte gib mindestens zwei Optionen an.", color=0xe74c3c)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
         return
     embed = Embed(title="📊 Umfrage", description=frage, color=0x3498db)
     emojis = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣"]
@@ -427,7 +548,7 @@ async def umfrage(interaction: discord.Interaction, frage: str, option1: str, op
     msg = await interaction.channel.send(embed=embed)
     for i in range(len(options)):
         await msg.add_reaction(emojis[i])
-    await interaction.response.send_message("Umfrage wurde gestartet!", ephemeral=True)
+    await interaction.response.send_message(embed=discord.Embed(title="✅ Umfrage gestartet", description="Die Umfrage wurde erstellt.", color=0x2ecc71), ephemeral=True)
 
 @bot.tree.command(name="melden", description="Melde eine beleidigende Nachricht zur Überprüfung")
 @app_commands.describe(wort="Das beleidigende Wort oder Satz")
@@ -464,6 +585,82 @@ async def lootbox(interaction: discord.Interaction):
     repo.log_lootbox(user_id, reward)
     await update_member_title(interaction.user)
     embed = discord.Embed(title="🪙 Lootbox geöffnet!", description=f"Du hast **{reward} Honor** aus der Lootbox erhalten!", color=0x9b59b6)
+
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="pet_adopt", description="Adoptiere ein Haustier für den Honor-Bonus")
+async def pet_adopt(interaction: discord.Interaction):
+    if repo.has_pet(interaction.user.id):
+        embed = discord.Embed(title="🐾 Haustier", description="Du besitzt bereits ein Haustier!", color=0xe67e22)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    repo.create_pet(interaction.user.id)
+    embed = discord.Embed(title="🐾 Haustier adoptiert", description="Dein neues Haustier begleitet dich nun und verdoppelt deine Honor-Gewinne!", color=0x2ecc71)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="pet_info", description="Zeigt Level und Erfahrung deines Haustiers")
+async def pet_info(interaction: discord.Interaction):
+    if not repo.has_pet(interaction.user.id):
+        embed = discord.Embed(title="🐾 Kein Haustier", description="Adoptiere zuerst ein Haustier mit /pet_adopt", color=0xe74c3c)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    level, xp = repo.get_pet(interaction.user.id)
+    embed = discord.Embed(title="🐾 Dein Haustier", color=0x3498db)
+    embed.add_field(name="Level", value=str(level))
+    embed.add_field(name="Erfahrung", value=f"{xp}/{PET_XP_PER_LEVEL}")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="pet_train", description="Trainiere dein Haustier für Erfahrung")
+async def pet_train(interaction: discord.Interaction):
+    if not repo.has_pet(interaction.user.id):
+        embed = discord.Embed(title="🐾 Kein Haustier", description="Adoptiere zuerst ein Haustier mit /pet_adopt", color=0xe74c3c)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    gained = random.randint(5, 15)
+    repo.add_pet_xp(interaction.user.id, gained)
+    level, xp = repo.get_pet(interaction.user.id)
+    embed = discord.Embed(title="🐾 Training", description=f"Dein Haustier erhielt {gained} XP.", color=0x2ecc71)
+    embed.add_field(name="Level", value=str(level))
+    embed.add_field(name="Erfahrung", value=f"{xp}/{PET_XP_PER_LEVEL}")
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="pet_battle", description="Fordere einen anderen Spieler zum Haustier-Kampf heraus")
+@app_commands.describe(opponent="Der Spieler, den du herausforderst")
+async def pet_battle(interaction: discord.Interaction, opponent: discord.Member):
+    if opponent.bot:
+        embed = discord.Embed(title="🐾 Kampf", description="Du kannst nicht gegen Bots kämpfen.", color=0xe74c3c)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    if not repo.has_pet(interaction.user.id) or not repo.has_pet(opponent.id):
+        embed = discord.Embed(title="🐾 Kampf", description="Beide Spieler benötigen ein Haustier, um zu kämpfen.", color=0xe67e22)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    winner = random.choice([interaction.user, opponent])
+    loser = opponent if winner == interaction.user else interaction.user
+    repo.add_user_honor(winner.id, 50, reason="Pet Battle", by=interaction.user.id)
+    repo.add_pet_xp(winner.id, 20)
+    repo.add_pet_xp(loser.id, 10)
+    embed = discord.Embed(title="🐾 Haustier-Kampf", color=0x9b59b6)
+    embed.description = f"{winner.mention} gewinnt den Kampf gegen {loser.mention} und erhält 50 Honor (mit Haustier-Bonus)!"
+    await interaction.response.send_message(embed=embed)
+
+@bot.tree.command(name="rubel", description="Zeigt dein aktuelles Rubel-Guthaben")
+async def rubel(interaction: discord.Interaction):
+    amount = repo.get_user_rubel(interaction.user.id)
+    embed = discord.Embed(title="💰 Rubel", description=f"Du besitzt **{amount}** Rubel.", color=0xf1c40f)
+    await interaction.response.send_message(embed=embed, ephemeral=True)
+
+@bot.tree.command(name="rubel_daily", description="Täglicher Bonus in Rubel")
+async def rubel_daily(interaction: discord.Interaction):
+    if not repo.can_claim_daily(interaction.user.id):
+        embed = discord.Embed(title="⏳ Daily Rubel", description="Du hast deinen Daily Bonus heute schon abgeholt!", color=0xe67e22)
+        await interaction.response.send_message(embed=embed, ephemeral=True)
+        return
+    repo.add_user_rubel(interaction.user.id, RUBEL_DAILY)
+    repo.claim_daily(interaction.user.id)
+    embed = discord.Embed(title="💰 Daily Rubel", description=f"Du hast {RUBEL_DAILY} Rubel erhalten!", color=0x2ecc71)
+=======
+
     await interaction.response.send_message(embed=embed, ephemeral=True)
 
 class BestätigungsView(View):
